@@ -4,7 +4,7 @@ defmodule Sqlcommenter.MixProject do
   def project do
     [
       app: :sqlcommenter,
-      version: "0.1.0",
+      version: "0.1.1",
       elixir: "~> 1.14",
       start_permanent: Mix.env() == :prod,
       description: description(),
@@ -23,6 +23,7 @@ defmodule Sqlcommenter.MixProject do
     Serialize and deserilze sqlcommenter data in sql queries
     """
   end
+
   defp package do
     [
       name: :sqlcommenter,
@@ -34,6 +35,7 @@ defmodule Sqlcommenter.MixProject do
       }
     ]
   end
+
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [

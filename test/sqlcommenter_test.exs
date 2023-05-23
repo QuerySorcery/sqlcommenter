@@ -2,13 +2,13 @@ defmodule SqlcommenterTest do
   use ExUnit.Case
   doctest Sqlcommenter
 
-  describe "serialize" do
+  describe "append_to_query" do
     test "documetation example" do
       expected =
         "SELECT * FROM FOO /*action='%2Fparam%2Ad',controller='index',framework='spring',traceparent='00-5bd66ef5095369c7b0d1f8f4bd33716a-c532cb4098ac3dd2-01',tracestate='congo%3Dt61rcWkgMzE%2Crojo%3D00f067aa0ba902b7'*/"
 
       result =
-        Sqlcommenter.serialize("SELECT * FROM FOO",
+        Sqlcommenter.append_to_query("SELECT * FROM FOO",
           tracestate: "congo=t61rcWkgMzE,rojo=00f067aa0ba902b7",
           traceparent: "00-5bd66ef5095369c7b0d1f8f4bd33716a-c532cb4098ac3dd2-01",
           framework: "spring",
@@ -23,7 +23,7 @@ defmodule SqlcommenterTest do
       expected = "SELECT * FROM FOO /*meta='%27%27',sql='DROP%20TABLE%20FOO'*/"
 
       result =
-        Sqlcommenter.serialize("SELECT * FROM FOO",
+        Sqlcommenter.append_to_query("SELECT * FROM FOO",
           meta: "''",
           sql: "DROP TABLE FOO"
         )
@@ -35,7 +35,7 @@ defmodule SqlcommenterTest do
       expected = "SELECT * FROM FOO /*sql='DROP%20TABLE%20FOO'*/"
 
       result =
-        Sqlcommenter.serialize("SELECT * FROM FOO",
+        Sqlcommenter.append_to_query("SELECT * FROM FOO",
           sql: "DROP TABLE FOO"
         )
 
@@ -47,7 +47,7 @@ defmodule SqlcommenterTest do
         "SELECT * FROM FOO /*action='%2Fparam%2Ad',controller='index',framework='spring',trace='%25%7Bsampled%3A%20true%2C%20span_id%3A%20%22c532cb4098ac3dd2%22%2C%20trace_id%3A%20%225bd66ef5095369c7b0d1f8f4bd33716a%22%2C%20trace_state%3A%20%5B%25%7B%22congo%22%20%3D%3E%20%22t61rcWkgMzE%22%7D%2C%20%25%7B%22rojo%22%20%3D%3E%20%2200f067aa0ba902b7%22%7D%5D%7D'*/"
 
       result =
-        Sqlcommenter.serialize("SELECT * FROM FOO",
+        Sqlcommenter.append_to_query("SELECT * FROM FOO",
           controller: "index",
           framework: "spring",
           action: "/param*d",

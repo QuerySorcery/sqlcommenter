@@ -10,6 +10,7 @@ defmodule Sqlcommenter do
   def deserialize(query) do
     [_query, data] =
       query
+      |> String.trim()
       |> String.trim_trailing("'*/")
       |> String.split("/*")
 
@@ -27,21 +28,50 @@ defmodule Sqlcommenter do
   end
 
   @doc """
+  Encodes enumerable to iodata
+  """
+  @spec to_iodata(Enumerable.t()) :: String.t()
+  def to_iodata(params) do
+    iodata =
+      for entry <- Enum.sort(params, &(&1 >= &2)), reduce: [] do
+        [] -> encode_kv_pair(entry)
+        acc -> [encode_kv_pair(entry), "," | acc]
+      end
+
+    case IO.iodata_length(iodata) do
+      0 -> ""
+      _ -> [" /*", iodata, "*/"]
+    end
+  end
+
+  @doc """
+  Encodes enumerable to string
+  """
+  @spec to_str(Enumerable.t()) :: String.t()
+  def to_str(params) do
+    params
+    |> to_iodata()
+    |> IO.iodata_to_binary()
+  end
+
+  @doc """
   Appends serialized data to query
   """
-  @spec serialize(String.t(), Enumerable.t()) :: String.t()
-  def serialize(query, params) do
-    escaped =
-      params
-      |> Enum.sort()
-      |> Enum.map_join(",", &encode_kv_pair/1)
-
-    query <> " /*" <> escaped <> "*/"
+  @spec append_to_query(String.t(), Enumerable.t()) :: String.t()
+  def append_to_query(query, params) do
+    params
+    |> to_iodata()
+    |> List.insert_at(0, query)
+    |> IO.iodata_to_binary()
   end
 
   defp encode_kv_pair({key, value}) do
-    URI.encode(stringify(key), &URI.char_unreserved?/1) <>
-      "='" <> URI.encode(stringify(value), &URI.char_unreserved?/1) <> "'"
+    [
+      URI.encode(stringify(key), &URI.char_unreserved?/1),
+      "='",
+      URI.encode(stringify(value), &URI.char_unreserved?/1),
+      "'"
+    ]
   end
 
   defp stringify(value) do
