@@ -4,7 +4,7 @@ defmodule Sqlcommenter.MixProject do
   def project do
     [
       app: :sqlcommenter,
-      version: "0.1.1",
+      version: "0.1.2",
       elixir: "~> 1.14",
       start_permanent: Mix.env() == :prod,
       description: description(),
@@ -39,7 +39,7 @@ defmodule Sqlcommenter.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:ex_doc, "~> 0.28", only: :dev, runtime: false}
+      {:ex_doc, "~> 0.30", only: :dev, runtime: false}
     ]
   end
 end
