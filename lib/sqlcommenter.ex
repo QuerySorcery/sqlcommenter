@@ -7,11 +7,11 @@ defmodule Sqlcommenter do
   extracts serialized data from query
 
   ## Example
-  iex> query = ~s{SELECT p0."id", p0."first_name" FROM "person"."person" AS p0 /*request_id='fa2af7b2-d8e1-4e8f-8820-3fd648b73187'*/} 
+  iex> query = ~s{SELECT p0."id", p0."first_name" FROM "person"."person" AS p0 /*request_id='fa2af7b2-d8e1-4e8f-8820-3fd648b73187'*/}
   iex> Sqlcommenter.deserialize(query)
   %{"request_id" => "fa2af7b2-d8e1-4e8f-8820-3fd648b73187"}
   """
-  @spec deserialize(String.t()) :: String.t()
+  @spec deserialize(String.t()) :: map()
   def deserialize(query) do
     [_query, data] =
       query
@@ -37,21 +37,26 @@ defmodule Sqlcommenter do
   iex> Sqlcommenter.to_iodata(controller: :person, function: :index)
   [
     " /*",
-    [["controller", "='", "person", "'"], ",", "function", "='", "index", "'"],
+    [
+      ["controller", "='", "person", "'"],
+      ",",
+      ["function", "='", "index", "'"]
+    ],
     "*/"
   ]
   """
-  @spec to_iodata(Enumerable.t()) :: String.t()
-  def to_iodata(params) do
-    iodata =
-      for entry <- Enum.sort(params, &(&1 >= &2)), reduce: [] do
-        [] -> encode_kv_pair(entry)
-        acc -> [encode_kv_pair(entry), "," | acc]
-      end
+  @spec to_iodata(Enumerable.t() | nil) :: maybe_improper_list()
+  def to_iodata(nil), do: []
 
-    case IO.iodata_length(iodata) do
-      0 -> []
-      _ -> [" /*", iodata, "*/"]
+  def to_iodata(params) do
+    params
+    |> Enum.sort(&(&1 <= &2))
+    |> Enum.reject(fn {_k, val} -> val == nil end)
+    |> Enum.map(&encode_kv_pair(&1))
+    |> Enum.intersperse(",")
+    |> case do
+      [] -> []
+      iodata -> [" /*", iodata, "*/"]
     end
   end
 
@@ -70,18 +75,46 @@ defmodule Sqlcommenter do
   @doc """
   Appends serialized data to query
 
+  iex> query = ["SELECT", [~s{p0."id"}, ", ", ~s{p0."first_name"}], " FROM ", ~s{"person"."person"}, " AS ", "p0"]
+  iex> Sqlcommenter.append_to_io_query(query, %{controller: :person, function: :index})
+  [
+    ["SELECT", [~s{p0."id"}, ", ", ~s{p0."first_name"}], " FROM ", ~s{"person"."person"}, " AS ", "p0"],
+    " /*",
+    [
+      ["controller", "='", "person", "'"],
+      ",",
+      ["function", "='", "index", "'"]
+   ],
+  "*/"]
+
+  """
+  @spec append_to_io_query(String.t(), Enumerable.t() | nil) :: String.t()
+  def append_to_io_query(query, params) do
+    params
+    |> to_iodata()
+    |> case do
+      [] -> query
+      commenter -> [query | commenter]
+    end
+  end
+
+  @doc """
+  Appends serialized data to query
+
   iex> query = ~s{SELECT p0."id", p0."first_name" FROM "person"."person" AS p0}
   iex> Sqlcommenter.append_to_query(query, %{controller: :person, function: :index})
   ~s{SELECT p0.\"id\", p0.\"first_name\" FROM \"person\".\"person\" AS p0 } <>
   "/*controller='person',function='index'*/"
 
   """
-  @spec append_to_query(String.t(), Enumerable.t()) :: String.t()
-  def append_to_query(query, params) do
+  @spec append_to_query(String.t(), Enumerable.t() | nil) :: String.t()
+  def append_to_query(query, params) when is_binary(query) do
     params
     |> to_iodata()
-    |> List.insert_at(0, query)
-    |> IO.iodata_to_binary()
+    |> case do
+      [] -> query
+      commenter -> IO.iodata_to_binary([query, commenter])
+    end
   end
 
   defp encode_kv_pair({key, value}) do

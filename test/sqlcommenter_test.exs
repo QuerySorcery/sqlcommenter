@@ -19,6 +19,20 @@ defmodule SqlcommenterTest do
       assert result == expected
     end
 
+    test "drops empty values" do
+      expected =
+        "SELECT * FROM FOO /*controller='index',framework='spring'*/"
+
+      result =
+        Sqlcommenter.append_to_query("SELECT * FROM FOO",
+          traceparent: nil,
+          framework: "spring",
+          controller: "index"
+        )
+
+      assert result == expected
+    end
+
     test "escapes meta characters" do
       expected = "SELECT * FROM FOO /*meta='%27%27',sql='DROP%20TABLE%20FOO'*/"
 
@@ -77,6 +91,39 @@ defmodule SqlcommenterTest do
         "trace" =>
           "%{sampled: true, span_id: \"c532cb4098ac3dd2\", trace_id: \"5bd66ef5095369c7b0d1f8f4bd33716a\", trace_state: [%{\"congo\" => \"t61rcWkgMzE\"}, %{\"rojo\" => \"00f067aa0ba902b7\"}]}"
       }
+
+      assert result == expected
+    end
+  end
+
+  describe "append_to_io_query" do
+    test "documetation example" do
+      expected =
+        [
+          ["SELECT ", "*", ["FROM ", "FOO"]],
+          " /*",
+          [
+            ["action", "='", "%2Fparam%2Ad", "'"],
+            ",",
+            ["controller", "='", "index", "'"],
+            ",",
+            ["framework", "='", "spring", "'"],
+            ",",
+            ["traceparent", "='", "00-5bd66ef5095369c7b0d1f8f4bd33716a-c532cb4098ac3dd2-01", "'"],
+            ",",
+            ["tracestate", "='", "congo%3Dt61rcWkgMzE%2Crojo%3D00f067aa0ba902b7", "'"]
+          ],
+          "*/"
+        ]
+
+      result =
+        Sqlcommenter.append_to_io_query(["SELECT ", "*", ["FROM ", "FOO"]],
+          tracestate: "congo=t61rcWkgMzE,rojo=00f067aa0ba902b7",
+          traceparent: "00-5bd66ef5095369c7b0d1f8f4bd33716a-c532cb4098ac3dd2-01",
+          framework: "spring",
+          action: "/param*d",
+          controller: "index"
+        )
 
       assert result == expected
     end

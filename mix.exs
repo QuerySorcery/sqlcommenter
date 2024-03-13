@@ -4,7 +4,7 @@ defmodule Sqlcommenter.MixProject do
   def project do
     [
       app: :sqlcommenter,
-      version: "0.1.2",
+      version: "0.1.3",
       elixir: "~> 1.14",
       start_permanent: Mix.env() == :prod,
       description: description(),
@@ -28,9 +28,9 @@ defmodule Sqlcommenter.MixProject do
     [
       name: :sqlcommenter,
       licenses: ["Apache-2.0"],
-      source_url: "https://github.com/dkuku/sqlcommenter",
+      source_url: "https://github.com/querysorcery/sqlcommenter",
       links: %{
-        GitHub: "https://github.com/dkuku/sqlcommenter",
+        GitHub: "https://github.com/querysorcery/sqlcommenter",
         Specification: "https://google.github.io/sqlcommenter/"
       }
     ]
