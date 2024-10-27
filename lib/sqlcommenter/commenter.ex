@@ -53,7 +53,7 @@ defmodule Sqlcommenter.Commenter do
   @doc """
   The same as to_iodata but it assumes the keys are sorted already.
   """
-  @spec sorted_to_iodata(Keyword.t()) :: maybe_improper_list()
+  @spec sorted_to_iodata(Keyword.t()) :: iodata()
   def sorted_to_iodata(params) do
     for {key, value} <- params, value != nil do
       [
@@ -71,7 +71,7 @@ defmodule Sqlcommenter.Commenter do
   iex> Sqlcommenter.Commenter.to_str(controller: :person, function: :index)
   "controller='person',function='index'"
   """
-  @spec to_str(Enumerable.t()) :: String.t()
+  @spec to_str(Keyword.t()) :: String.t()
   def to_str(params) do
     params
     |> to_iodata()
@@ -94,7 +94,7 @@ defmodule Sqlcommenter.Commenter do
   "*/"]
 
   """
-  @spec append_to_io_query(String.t(), Enumerable.t() | nil) :: String.t()
+  @spec append_to_io_query(iodata, Keyword.t()) :: iodata
   def append_to_io_query(query, params) do
     params
     |> to_iodata()
@@ -113,14 +113,11 @@ defmodule Sqlcommenter.Commenter do
   "/*controller='person',function='index'*/"
 
   """
-  @spec append_to_query(String.t(), Enumerable.t() | nil) :: String.t()
+  @spec append_to_query(String.t(), Keyword.t()) :: String.t()
   def append_to_query(query, params) when is_binary(query) do
-    params
-    |> to_iodata()
-    |> case do
-      [] -> query
-      commenter -> IO.iodata_to_binary([query, " /*", commenter, "*/"])
-    end
+    query
+    |> append_to_io_query(params)
+    |> IO.iodata_to_binary()
   end
 
   defp stringify(value) when is_binary(value), do: value
