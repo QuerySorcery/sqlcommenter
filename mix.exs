@@ -1,7 +1,7 @@
 defmodule Sqlcommenter.MixProject do
   use Mix.Project
 
-  @version "0.2.0-alpha.1"
+  @version "0.2.0-beta.1"
   def project do
     [
       app: :sqlcommenter,
@@ -40,8 +40,7 @@ defmodule Sqlcommenter.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:ex_doc, "~> 0.30", only: :dev, runtime: false},
-      {:ecto, "~> 3.10", optional: true}
+      {:ex_doc, "~> 0.30", only: :dev, runtime: false}
     ]
   end
 end

@@ -1,66 +1,194 @@
 defmodule Sqlcommenter do
   @moduledoc """
-    Sqlcommenter is a library for adding sqlcommener comments to your ecto queries
+    Sqlcommenter is a library for adding sqlcommener comments to your ecto queries.
 
     ## Usage
-    Install the library.
-    If your app is managing the migrations for your ecto repo you will need to follow these steps:
-    Duplicate the repo config in your to include this repo. It should be identical as the
-    exising Repo.  Duplicate your existing MyApp.Repo module to MyApp.MigrationsRepo.  Add a
-    config option to point to your exisiting migrations folder in MigrationsRepo in existing
-    Repo change use to use Sqlcommenter.Repo.  add any static sqlcommenter options that will
-    be included in all calls to the Repo config.
+    Add these callbacks to your Repo module, adjust to your needs.
+    The stacktrace option is only required when you plan to include use the extract_repo_caller function.
+    This function also accepts the __MODULE__ as the second argument to exclude it from the stacktrace.
 
-   At then end you will end up with 2 Repo modules just like this:
+   The sqlcommenter option is used for adding static data to the commenent like the running app, team, owner etc.
+   Any dynamic data can be added in the prepare_query function. Besides the caller it can also add the trace and span.
 
-  ```
-  defmodule Repo do
-    use Sqlcommenter.Repo,
-      otp_app: :my_app,
-      adapter: Ecto.Adapters.Postgres,
-      sqlcommenter: [app: "test_app", owner: "team_c"]
+  The generated comment needs to be added as comment option - this will be passed to the adapter.
+
+  ```elixir
+
+  def default_options(_operation) do
+    [stacktrace: true, prepare: :unnamed, sqlcommenter: [team: "sqlcomm", app: "sqlcomm"]]
   end
 
-  defmodule MigrationRepo do
-    use Ecto.Repo,
-      otp_app: :my_app,
-      adapter: Ecto.Adapters.Postgres,
-      priv: "priv/repo"
+  def prepare_query(_operation, query, opts) do
+    caller = Sqlcommenter.extract_repo_caller(opts, __MODULE__)
+
+    opts =
+      case Keyword.get(opts, :sqlcommenter) do
+        nil ->
+          opts
+
+        sqlcommenter ->
+          [comment: Sqlcommenter.to_str([caller: caller] ++ sqlcommenter)] ++ opts
+      end
+
+    {query, opts}
   end
-  ``
-
-  The Sqlcommenter.Repo uses macros under the hood to get additional data from the caller so
-  it needs to be required everywhere where it is used
-
-  ```
-  require MyApp.Repo
-  alias MyApp.Repo
   ```
 
-  You can then use the Repo as normal.  The Sqlcommenter.Repo will add the sqlcommenter comment
-  to the query.
-
-
+  Now your postgres logs should look will return a log line like this:
 
   ```
-  defmodule W do
-    require Test.Repo
+  2024-10-27 21:43:04.331 GMT,"postgres","sqlcomm_test",416336,"127.0.0.1:53348",671eb3e8.65a50,6,
+  "SELECT",2024-10-27 21:43:04 GMT,15/54,61620,LOG,00000,"execute <unnamed>: SELECT u0.""id"",
+  u0.""active"", u0.""name"", u0.""inserted_at"", u0.""updated_at"" FROM ""users"" AS
+  u0/*app='sqlcomm',caller='Elixir.SqlcommTest.test%20insert%20user%2F1',team='sqlcomm'*/"
+  ,,,,,,,,,"","client backend",,0
+  ```
+  """
 
-    def get do
-      Test.Repo.all(Weather)
+  @doc """
+  extracts serialized data from query
+
+  ## Example
+  iex> query = ~s{SELECT p0."id", p0."first_name" FROM "person"."person" AS p0 /*request_id='fa2af7b2-d8e1-4e8f-8820-3fd648b73187'*/}
+  iex> Sqlcommenter.Commenter.deserialize(query)
+  %{"request_id" => "fa2af7b2-d8e1-4e8f-8820-3fd648b73187"}
+  """
+  @spec deserialize(String.t()) :: map()
+  def deserialize(query) do
+    [_query, data] =
+      query
+      |> String.trim()
+      |> String.trim_trailing("'*/")
+      |> String.split("/*")
+
+    data
+    |> String.split(",")
+    |> Enum.map(fn row ->
+      [key, value] = String.split(row, "='")
+
+      {key,
+       value
+       |> String.trim_trailing("'")
+       |> URI.decode()}
+    end)
+    |> Map.new()
+  end
+
+  @doc """
+  Encodes enumerable to iodata
+  iex> Sqlcommenter.Commenter.to_iodata(controller: :person, function: :index)
+  [
+      ["controller", "='", "person", "'"],
+      ",",
+      ["function", "='", "index", "'"]
+  ]
+  """
+  @spec to_iodata(Keyword.t()) :: maybe_improper_list()
+  def to_iodata(nil), do: []
+
+  def to_iodata(params) do
+    params
+    |> Enum.sort(&(&1 <= &2))
+    |> sorted_to_iodata()
+  end
+
+  @doc """
+  The same as to_iodata but it assumes the keys are sorted already.
+  """
+  @spec sorted_to_iodata(Keyword.t()) :: iodata()
+  def sorted_to_iodata(params) do
+    for {key, value} <- params, value != nil do
+      [
+        URI.encode(stringify(key), &URI.char_unreserved?/1),
+        "='",
+        URI.encode(stringify(value), &URI.char_unreserved?/1),
+        "'"
+      ]
+    end
+    |> Enum.intersperse(",")
+  end
+
+  @doc """
+  Encodes enumerable to string
+  iex> Sqlcommenter.Commenter.to_str(controller: :person, function: :index)
+  "controller='person',function='index'"
+  """
+  @spec to_str(Keyword.t()) :: String.t()
+  def to_str(params) do
+    params
+    |> to_iodata()
+    |> IO.iodata_to_binary()
+  end
+
+  @doc """
+  Appends serialized data to query
+
+  iex> query = ["SELECT", [~s{p0."id"}, ", ", ~s{p0."first_name"}], " FROM ", ~s{"person"."person"}, " AS ", "p0"]
+  iex> Sqlcommenter.Commenter.append_to_io_query(query, %{controller: :person, function: :index})
+  [
+    ["SELECT", [~s{p0."id"}, ", ", ~s{p0."first_name"}], " FROM ", ~s{"person"."person"}, " AS ", "p0"],
+    " /*",
+    [
+      ["controller", "='", "person", "'"],
+      ",",
+      ["function", "='", "index", "'"]
+   ],
+  "*/"]
+
+  """
+  @spec append_to_io_query(iodata, Keyword.t()) :: iodata
+  def append_to_io_query(query, params) do
+    params
+    |> to_iodata()
+    |> case do
+      [] -> query
+      commenter -> [query, " /*", commenter, "*/"]
     end
   end
 
-  W.get()
-  ```
-  will return a log line like this:
-  ```
-  2024-10-26 09:21:27.368
-  BST,"postgres","postgres",89302,"127.0.0.1:56568",671ca5a8.15cd6,1,"SELECT",2024-10-26
-  09:17:44 BST,9/37,0,LOG,00000,"execute <unnamed>: SELECT
-  w0.""id"", v1.""name"" FROM ""weather"" AS w0 INNER JOIN (VALUES
-  ($1::bigint,$2::varchar),($3::bigint,$4::varchar)) AS v1 (""id"",""name"") ON v1.""id"" =
-  w0.""id""/*app='test_app',function='get%2F0',line='11',module='W',owner='team_c'*/","parameters:
-  $1 = '1', $2 = 'zabrze', $3 = '2', $4 = 'dudley'",,,,,,,,"","client backend",,0
+  @doc """
+  Appends serialized data to query
+
+  iex> query = ~s{SELECT p0."id", p0."first_name" FROM "person"."person" AS p0}
+  iex> Sqlcommenter.Commenter.append_to_query(query, %{controller: :person, function: :index})
+  ~s{SELECT p0.\"id\", p0.\"first_name\" FROM \"person\".\"person\" AS p0 } <>
+  "/*controller='person',function='index'*/"
+
   """
+  @spec append_to_query(String.t(), Keyword.t()) :: String.t()
+  def append_to_query(query, params) when is_binary(query) do
+    query
+    |> append_to_io_query(params)
+    |> IO.iodata_to_binary()
+  end
+
+  defp stringify(value) when is_binary(value), do: value
+
+  defp stringify(value) do
+    try do
+      to_string(value)
+    rescue
+      _e ->
+        inspect(value)
+    end
+  end
+
+  @internal_functions [Ecto.Repo.Supervisor, ExUnit.Runner, :timer]
+  def extract_repo_caller(opts, repo_module) when is_list(opts) do
+    opts
+    |> Keyword.get(:stacktrace, [])
+    |> Enum.find(fn
+      # Skip internal Ecto and standard library calls
+      {module, _func, _arity, _} when module in @internal_functions -> false
+      {^repo_module, _func, _arity, _} -> false
+      # Skip anonymous functions
+      {_, "-" <> _func, _, _} -> false
+      # Match on the actual caller
+      {_module, _func, _arity, _} -> true
+    end)
+    |> case do
+      nil -> nil
+      {module, func, arity, _file_info} -> "#{module}.#{func}/#{arity}"
+    end
+  end
 end
