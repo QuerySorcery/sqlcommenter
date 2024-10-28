@@ -32,7 +32,6 @@ Attach SQL comments to correlate user code in ORMs and SQL drivers with SQL stat
 The generated comment needs to be added as comment option - this will be passed to the adapter.
 
 ```elixir
-
 def default_options(_operation) do
   [stacktrace: true, prepare: :unnamed, sqlcommenter: [team: "sqlcomm", app: "sqlcomm"]]
 end
@@ -57,7 +56,8 @@ u0/*app='sqlcomm',caller='Elixir.SqlcommTest.test%20insert%20user%2F1',team='sql
 
 Alternatively, when you're concerned about performance and your options are mostly static
 you can also omit the Sqlcommenter logic and write your own custom function.
-Just remember that according the sqlcommenter specs the keys must be sorted.
+Just remember that according the sqlcommenter specs the keys must be sorted,
+and the values properly escaped check [specification](https://google.github.io/sqlcommenter/spec/) and sqlcommenter source code.
 
 ```elixir
 defmodule SqlEEx do
