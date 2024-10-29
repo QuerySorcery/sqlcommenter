@@ -9,6 +9,7 @@ defmodule Sqlcommenter do
   extracts serialized data from query
 
   ## Example
+
   iex> query = ~s{SELECT p0."id", p0."first_name" FROM "person"."person" AS p0 /*request_id='fa2af7b2-d8e1-4e8f-8820-3fd648b73187'*/}
   iex> Sqlcommenter.deserialize(query)
   %{"request_id" => "fa2af7b2-d8e1-4e8f-8820-3fd648b73187"}
@@ -36,6 +37,9 @@ defmodule Sqlcommenter do
 
   @doc """
   Encodes enumerable to iodata
+
+  ## Example
+
   iex> Sqlcommenter.to_iodata(controller: :person, function: :index)
   [
       ["controller", "='", "person", "'"],
@@ -58,18 +62,32 @@ defmodule Sqlcommenter do
   @spec sorted_to_iodata(Keyword.t()) :: iodata()
   def sorted_to_iodata(params) do
     for {key, value} <- params, value != nil do
-      [
-        URI.encode(stringify(key), &URI.char_unreserved?/1),
-        "='",
-        URI.encode(stringify(value), &URI.char_unreserved?/1),
-        "'"
-      ]
+      [escape(key), "='", escape(value), "'"]
     end
     |> Enum.intersperse(",")
   end
 
   @doc """
+  Escapes params to be safe for SQL
+
+  ## Example
+
+  iex> Sqlcommenter.escape("comment")
+  "comment"
+  iex> Sqlcommenter.escape("AccountUsers.get_user(1)")
+  "AccountUsers.get_user%281%29"
+  iex> Sqlcommenter.escape("*/ drop table person")
+  "%2A%2F%20drop%20table%20person"
+  """
+  def escape(param) do
+    URI.encode(stringify(param), &URI.char_unreserved?/1)
+  end
+
+  @doc """
   Encodes enumerable to string
+
+  ## Example
+
   iex> Sqlcommenter.to_str(controller: :person, function: :index)
   "controller='person',function='index'"
   """
@@ -82,6 +100,9 @@ defmodule Sqlcommenter do
 
   @doc """
   Appends serialized data to query
+
+
+  ## Example
 
   iex> query = ["SELECT", [~s{p0."id"}, ", ", ~s{p0."first_name"}], " FROM ", ~s{"person"."person"}, " AS ", "p0"]
   iex> Sqlcommenter.append_to_io_query(query, %{controller: :person, function: :index})
@@ -108,6 +129,8 @@ defmodule Sqlcommenter do
 
   @doc """
   Appends serialized data to query
+
+  ## Example
 
   iex> query = ~s{SELECT p0."id", p0."first_name" FROM "person"."person" AS p0}
   iex> Sqlcommenter.append_to_query(query, %{controller: :person, function: :index})
