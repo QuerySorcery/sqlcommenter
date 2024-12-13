@@ -156,15 +156,28 @@ defmodule Sqlcommenter do
     end
   end
 
-  @internal_functions [Ecto.Repo.Supervisor, ExUnit.Runner, :timer]
+  @internal_functions [
+    Ecto.Repo.Supervisor,
+    Ecto.Changeset,
+    ExUnit.Runner,
+    ExUnit.Assertions,
+    :timer
+  ]
   def extract_repo_caller(opts, repo_module) when is_list(opts) do
     opts
     |> Keyword.get(:stacktrace, [])
     |> Enum.reduce_while(nil, fn
-      {^repo_module, _func, _arity, _}, _ -> {:cont, nil}
-      {module, _func, _arity, _}, _ when module in @internal_functions -> {:cont, nil}
-      {_, "-" <> _anonymous_func, _, _}, _ -> {:cont, nil}
-      {module, func, arity, _}, _ -> {:halt, "#{module}.#{func}/#{arity}"}
+      {^repo_module, _func, _arity, _}, _ ->
+        {:cont, nil}
+
+      {module, _func, _arity, _}, _ when module in @internal_functions ->
+        {:cont, nil}
+
+      {_, "-" <> _anonymous_func, _, _}, _ ->
+        {:cont, nil}
+
+      {module, func, arity, _}, _ ->
+        {:halt, String.trim_leading("#{module}.#{func}/#{arity}", "Elixir.")}
     end)
   end
 end
